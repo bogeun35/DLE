@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>현장별 계약 현황 대시보드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-title {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .card-subtitle {
+            color: #999;
+            font-size: 0.85em;
+            margin-top: 5px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s ease;
+        }
+
+        .sites-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .site-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .site-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .site-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .site-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .stat-item {
+            text-align: center;
+            flex: 1;
+        }
+
+        .stat-label {
+            font-size: 0.75em;
+            color: #999;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-value.completed { color: #4caf50; }
+        .stat-value.progress { color: #ff9800; }
+        .stat-value.rejected { color: #f44336; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal-content {
+            background: white;
+            max-width: 900px;
+            margin: 50px auto;
+            border-radius: 15px;
+            padding: 30px;
+            position: relative;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 25px;
+            font-size: 30px;
+            cursor: pointer;
+            color: #999;
+            transition: color 0.3s;
+        }
+
+        .close-btn:hover {
+            color: #333;
+        }
+
+        .modal-title {
+            font-size: 1.8em;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tr:hover {
+            background: #f5f5f5;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-completed {
+            background: #e8f5e9;
+            color: #4caf50;
+        }
+
+        .status-progress {
+            background: #fff3e0;
+            color: #ff9800;
+        }
+
+        .status-rejected {
+            background: #ffebee;
+            color: #f44336;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.5em;
+            padding: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 현장별 계약 현황 대시보드</h1>
+        
+        <div id="loading" class="loading">데이터를 불러오는 중...</div>
+        
+        <div id="dashboard" style="display: none;">
+            <div class="summary-cards">
+                <div class="card">
+                    <div class="card-title">전체 매장</div>
+                    <div class="card-value" id="total-stores">0</div>
+                    <div class="card-subtitle">총 매장 수</div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-title">계약 완료</div>
+                    <div class="card-value" id="completed-count" style="color: #4caf50;">0</div>
+                    <div class="card-subtitle">완료된 계약</div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-title">진행 중</div>
+                    <div class="card-value" id="progress-count" style="color: #ff9800;">0</div>
+                    <div class="card-subtitle">진행 중인 계약</div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-title">계약 거절</div>
+                    <div class="card-value" id="rejected-count" style="color: #f44336;">0</div>
+                    <div class="card-subtitle">거절된 계약</div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-title">진척율</div>
+                    <div class="card-value" id="completion-rate">0%</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sites-grid" id="sites-grid"></div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h2 class="modal-title" id="modal-title"></h2>
+            <div class="summary-cards">
+                <div class="card">
+                    <div class="card-title">전체</div>
+                    <div class="card-value" id="modal-total">0</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">완료</div>
+                    <div class="card-value" id="modal-completed" style="color: #4caf50;">0</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">진행중</div>
+                    <div class="card-value" id="modal-progress" style="color: #ff9800;">0</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">거절</div>
+                    <div class="card-value" id="modal-rejected" style="color: #f44336;">0</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">진척율</div>
+                    <div class="card-value" id="modal-rate">0%</div>
+                </div>
+            </div>
+            <table id="detail-table">
+                <thead>
+                    <tr>
+                        <th>매장명</th>
+                        <th>주소</th>
+                        <th>상태</th>
+                        <th>비고</th>
+                    </tr>
+                </thead>
+                <tbody id="detail-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzD8fDno66QoWMhKWJj4jTCsoCtiMPOe8SL11BC-1sIgSbEC-a3HFHY8JIUaTSjPEtkP3wHurWv7sh/pub?gid=1210603345&single=true&output=csv';
+
+        let data = [];
+        let siteData = {};
+
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const result = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                
+                const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+                
+                if (values[0] && values[1]) {
+                    result.push({
+                        site: values[0],
+                        store: values[1],
+                        address: values[2] || '',
+                        status: values[4] || '',
+                        note: values[5] || ''
+                    });
+                }
+            }
+            
+            return result;
+        }
+
+        function processData() {
+            siteData = {};
+            
+            data.forEach(row => {
+                if (!siteData[row.site]) {
+                    siteData[row.site] = {
+                        total: 0,
+                        completed: 0,
+                        progress: 0,
+                        rejected: 0,
+                        stores: []
+                    };
+                }
+                
+                siteData[row.site].total++;
+                siteData[row.site].stores.push(row);
+                
+                const status = row.status.toLowerCase();
+                if (status.includes('완료')) {
+                    siteData[row.site].completed++;
+                } else if (status.includes('진행') || status.includes('대기')) {
+                    siteData[row.site].progress++;
+                } else if (status.includes('거절')) {
+                    siteData[row.site].rejected++;
+                }
+            });
+        }
+
+        function updateSummary() {
+            const totalStores = data.length;
+            let totalCompleted = 0;
+            let totalProgress = 0;
+            let totalRejected = 0;
+
+            Object.values(siteData).forEach(site => {
+                totalCompleted += site.completed;
+                totalProgress += site.progress;
+                totalRejected += site.rejected;
+            });
+
+            const completionRate = totalStores > 0 ? Math.round((totalCompleted / totalStores) * 100) : 0;
+
+            document.getElementById('total-stores').textContent = totalStores;
+            document.getElementById('completed-count').textContent = totalCompleted;
+            document.getElementById('progress-count').textContent = totalProgress;
+            document.getElementById('rejected-count').textContent = totalRejected;
+            document.getElementById('completion-rate').textContent = completionRate + '%';
+            document.getElementById('progress-fill').style.width = completionRate + '%';
+        }
+
+        function renderSites() {
+            const grid = document.getElementById('sites-grid');
+            grid.innerHTML = '';
+
+            Object.entries(siteData).sort((a, b) => a[0].localeCompare(b[0])).forEach(([siteName, site]) => {
+                const rate = site.total > 0 ? Math.round((site.completed / site.total) * 100) : 0;
+                
+                const card = document.createElement('div');
+                card.className = 'site-card';
+                card.onclick = () => showDetail(siteName, site);
+                
+                card.innerHTML = `
+                    <div class="site-name">${siteName}</div>
+                    <div class="site-stats">
+                        <div class="stat-item">
+                            <div class="stat-label">완료</div>
+                            <div class="stat-value completed">${site.completed}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">진행중</div>
+                            <div class="stat-value progress">${site.progress}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">거절</div>
+                            <div class="stat-value rejected">${site.rejected}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">진척율</div>
+                            <div class="stat-value">${rate}%</div>
+                        </div>
+                    </div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+
+        function showDetail(siteName, site) {
+            document.getElementById('modal-title').textContent = siteName;
+            document.getElementById('modal-total').textContent = site.total;
+            document.getElementById('modal-completed').textContent = site.completed;
+            document.getElementById('modal-progress').textContent = site.progress;
+            document.getElementById('modal-rejected').textContent = site.rejected;
+            
+            const rate = site.total > 0 ? Math.round((site.completed / site.total) * 100) : 0;
+            document.getElementById('modal-rate').textContent = rate + '%';
+
+            const tbody = document.getElementById('detail-tbody');
+            tbody.innerHTML = '';
+
+            site.stores.forEach(store => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${store.store}</td>
+                    <td>${store.address}</td>
+                    <td>
+                        <span class="status-badge ${getStatusClass(store.status)}">
+                            ${store.status || '미정'}
+                        </span>
+                    </td>
+                    <td>${store.note}</td>
+                `;
+            });
+
+            document.getElementById('modal').style.display = 'block';
+        }
+
+        function getStatusClass(status) {
+            const s = status.toLowerCase();
+            if (s.includes('완료')) return 'status-completed';
+            if (s.includes('거절')) return 'status-rejected';
+            return 'status-progress';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        window.onclick = function(e) {
+            const modal = document.getElementById('modal');
+            if (e.target === modal) {
+                closeModal();
+            }
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch(CSV_URL);
+                const text = await response.text();
+                
+                data = parseCSV(text);
+                processData();
+                updateSummary();
+                renderSites();
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').textContent = '데이터를 불러오는데 실패했습니다: ' + error.message;
+            }
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
