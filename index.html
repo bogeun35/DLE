@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DL이앤씨 현장별 계약 현황 대시보드</title>
+    <title>현장별 계약 현황 대시보드</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
@@ -85,9 +85,17 @@
             overflow: hidden;
         }
 
-        .progress-fill {
+        .progress-fill-completed {
             height: 100%;
             background: #4caf50;
+            float: left;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill-rejected {
+            height: 100%;
+            background: #d32f2f;
+            float: left;
             transition: width 0.3s ease;
         }
 
@@ -205,9 +213,16 @@
             overflow: hidden;
         }
 
-        .mini-progress-fill {
+        .mini-progress-fill-completed {
             height: 100%;
             background: #4caf50;
+            float: left;
+        }
+
+        .mini-progress-fill-rejected {
+            height: 100%;
+            background: #d32f2f;
+            float: left;
         }
 
         .mini-progress-text {
@@ -391,7 +406,8 @@
                     <div class="progress-container">
                         <span class="summary-label">진척율</span>
                         <div class="progress-bar">
-                            <div class="progress-fill" id="progress-fill"></div>
+                            <div class="progress-fill-completed" id="progress-fill-completed"></div>
+                            <div class="progress-fill-rejected" id="progress-fill-rejected"></div>
                         </div>
                         <span class="progress-text" id="completion-rate">0%</span>
                     </div>
@@ -414,7 +430,8 @@
                     <thead>
                         <tr>
                             <th style="width:50px">#</th>
-                            <th>시트명 (현장)</th>
+                            <th style="width:100px">현장구분</th>
+                            <th>현장</th>
                             <th style="width:80px">전체</th>
                             <th style="width:80px">완료</th>
                             <th style="width:80px">진행중</th>
@@ -455,6 +472,9 @@
                 <div class="modal-stat">
                     <span class="modal-stat-label">진척율</span>
                     <span class="modal-stat-value" id="modal-rate">0%</span>
+                </div>
+                <div class="modal-progress-container">
+                    <div class="mini-progress-bar" id="modal-progress-bar" style="width:200px;height:20px;"></div>
                 </div>
             </div>
             <div class="modal-body">
@@ -521,7 +541,8 @@
                         store: cleanText(values[1]),
                         address: cleanText(values[2] || ''),
                         status: cleanText(values[4] || ''),
-                        note: cleanText(values[5] || '')
+                        note: cleanText(values[5] || ''),
+                        category: cleanText(values[6] || '')
                     });
                 }
             }
@@ -575,7 +596,8 @@
                         completed: 0,
                         progress: 0,
                         rejected: 0,
-                        stores: []
+                        stores: [],
+                        category: row.category || ''
                     };
                 }
                 
@@ -612,30 +634,41 @@
             });
 
             const rate = calcRate(totalCompleted, totalRejected, totalStores);
+            const completedPct = totalStores > 0 ? (totalCompleted / totalStores) * 100 : 0;
+            const rejectedPct = totalStores > 0 ? (totalRejected / totalStores) * 100 : 0;
 
             document.getElementById('total-stores').textContent = totalStores.toLocaleString();
             document.getElementById('completed-count').textContent = totalCompleted.toLocaleString();
             document.getElementById('progress-count').textContent = totalProgress.toLocaleString();
             document.getElementById('rejected-count').textContent = totalRejected.toLocaleString();
             document.getElementById('completion-rate').textContent = rate + '%';
-            document.getElementById('progress-fill').style.width = rate + '%';
+            document.getElementById('progress-fill-completed').style.width = completedPct + '%';
+            document.getElementById('progress-fill-rejected').style.width = rejectedPct + '%';
         }
 
         function renderList() {
             const tbody = document.getElementById('list-tbody');
             tbody.innerHTML = '';
 
+            // 정렬: 현장구분 -> 현장명
             const sortedSites = Object.entries(siteData)
-                .sort((a, b) => a[0].localeCompare(b[0]));
+                .sort((a, b) => {
+                    const catCompare = (a[1].category || '').localeCompare(b[1].category || '');
+                    if (catCompare !== 0) return catCompare;
+                    return a[0].localeCompare(b[0]);
+                });
 
             sortedSites.forEach(([siteName, site], index) => {
                 const rate = calcRate(site.completed, site.rejected, site.total);
+                const completedPct = site.total > 0 ? (site.completed / site.total) * 100 : 0;
+                const rejectedPct = site.total > 0 ? (site.rejected / site.total) * 100 : 0;
                 
                 const row = document.createElement('tr');
                 row.onclick = () => showDetail(siteName, site);
                 
                 row.innerHTML = `
                     <td class="seq-cell">${index + 1}</td>
+                    <td>${site.category}</td>
                     <td class="site-name-cell">${siteName}</td>
                     <td class="num-cell">${site.total}</td>
                     <td class="num-cell completed">${site.completed}</td>
@@ -644,7 +677,8 @@
                     <td class="progress-cell">
                         <div class="mini-progress">
                             <div class="mini-progress-bar">
-                                <div class="mini-progress-fill" style="width:${rate}%"></div>
+                                <div class="mini-progress-fill-completed" style="width:${completedPct}%"></div>
+                                <div class="mini-progress-fill-rejected" style="width:${rejectedPct}%"></div>
                             </div>
                             <span class="mini-progress-text">${rate}%</span>
                         </div>
@@ -663,12 +697,32 @@
             document.getElementById('modal-rejected').textContent = site.rejected;
             
             const rate = calcRate(site.completed, site.rejected, site.total);
+            const completedPct = site.total > 0 ? (site.completed / site.total) * 100 : 0;
+            const rejectedPct = site.total > 0 ? (site.rejected / site.total) * 100 : 0;
             document.getElementById('modal-rate').textContent = rate + '%';
+            
+            // 프로그레스바 업데이트
+            document.getElementById('modal-progress-bar').innerHTML = `
+                <div class="mini-progress-fill-completed" style="width:${completedPct}%"></div>
+                <div class="mini-progress-fill-rejected" style="width:${rejectedPct}%"></div>
+            `;
 
             const tbody = document.getElementById('detail-tbody');
             tbody.innerHTML = '';
 
-            site.stores.forEach((store, idx) => {
+            // 정렬: 진행중 -> 완료 -> 거절
+            const sortedStores = [...site.stores].sort((a, b) => {
+                const getOrder = (status) => {
+                    const s = status.toLowerCase();
+                    if (s.includes('진행') || s.includes('대기')) return 1;
+                    if (s.includes('완료')) return 2;
+                    if (s.includes('거절')) return 3;
+                    return 0; // 미정
+                };
+                return getOrder(a.status) - getOrder(b.status);
+            });
+
+            sortedStores.forEach((store, idx) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="seq-cell">${idx + 1}</td>
@@ -709,10 +763,29 @@
 
         // 전체 CSV 다운로드
         function downloadFullCSV() {
-            let csv = '현장,매장명,주소,상태,비고\n';
+            let csv = '현장구분,현장,매장명,주소,상태,비고\n';
             
-            rawData.forEach(row => {
-                csv += `"${row.site}","${row.store}","${row.address}","${row.status}","${row.note}"\n`;
+            // 정렬: 현장구분 -> 현장명 -> 상태(진행중->완료->거절)
+            const sortedData = [...rawData].sort((a, b) => {
+                const site1 = siteData[a.site];
+                const site2 = siteData[b.site];
+                const catCompare = (site1?.category || '').localeCompare(site2?.category || '');
+                if (catCompare !== 0) return catCompare;
+                const siteCompare = a.site.localeCompare(b.site);
+                if (siteCompare !== 0) return siteCompare;
+                const getOrder = (status) => {
+                    const s = status.toLowerCase();
+                    if (s.includes('진행') || s.includes('대기')) return 1;
+                    if (s.includes('완료')) return 2;
+                    if (s.includes('거절')) return 3;
+                    return 0;
+                };
+                return getOrder(a.status) - getOrder(b.status);
+            });
+            
+            sortedData.forEach(row => {
+                const cat = siteData[row.site]?.category || '';
+                csv += `"${cat}","${row.site}","${row.store}","${row.address}","${row.status}","${row.note}"\n`;
             });
             
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -728,18 +801,24 @@
             
             // 요약 시트 데이터
             const summaryData = [
-                ['현장별 계약 현황 요약', '', '', '', '', '', ''],
+                ['현장별 계약 현황 요약', '', '', '', '', '', '', ''],
                 [''],
-                ['#', '현장명', '전체', '완료', '진행중', '거절', '진척율']
+                ['#', '현장구분', '현장명', '전체', '완료', '진행중', '거절', '진척율']
             ];
             
+            // 정렬: 현장구분 -> 현장명
             const sortedSites = Object.entries(siteData)
-                .sort((a, b) => a[0].localeCompare(b[0]));
+                .sort((a, b) => {
+                    const catCompare = (a[1].category || '').localeCompare(b[1].category || '');
+                    if (catCompare !== 0) return catCompare;
+                    return a[0].localeCompare(b[0]);
+                });
             
             sortedSites.forEach(([siteName, site], index) => {
                 const rate = calcRate(site.completed, site.rejected, site.total);
                 summaryData.push([
                     index + 1,
+                    site.category,
                     siteName,
                     site.total,
                     site.completed,
@@ -758,13 +837,14 @@
                 totals.rejected += site.rejected;
             });
             const totalRate = calcRate(totals.completed, totals.rejected, totals.total);
-            summaryData.push(['', '합계', totals.total, totals.completed, totals.progress, totals.rejected, totalRate / 100]);
+            summaryData.push(['', '', '합계', totals.total, totals.completed, totals.progress, totals.rejected, totalRate / 100]);
             
             const ws = XLSX.utils.aoa_to_sheet(summaryData);
             
             // 컬럼 너비 설정
             ws['!cols'] = [
                 { wch: 5 },   // #
+                { wch: 12 },  // 현장구분
                 { wch: 35 },  // 현장명
                 { wch: 8 },   // 전체
                 { wch: 8 },   // 완료
@@ -775,7 +855,7 @@
             
             // 진척율 컬럼 퍼센트 형식 + 데이터바 스타일
             for (let i = 3; i < summaryData.length; i++) {
-                const cellRef = XLSX.utils.encode_cell({ r: i, c: 6 });
+                const cellRef = XLSX.utils.encode_cell({ r: i, c: 7 });
                 if (ws[cellRef]) {
                     ws[cellRef].z = '0%';
                 }
