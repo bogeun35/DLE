@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> DL이앤씨 현장별 계약 현황 대시보드</title>
+    <title>현장별 계약 현황 대시보드</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=1329b082580a4823b7f61332c8e24741&libraries=services"></script>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1329b082580a4823b7f61332c8e24741&libraries=services&autoload=false"></script>
     <style>
         * {
             margin: 0;
@@ -114,7 +114,7 @@
         /* 지도 영역 */
         .map-container {
             width: 100%;
-            height: 350px;
+            height: 500px;
             border-radius: 8px;
             overflow: hidden;
             margin-bottom: 16px;
@@ -948,93 +948,149 @@
         let map = null;
         let markers = [];
         let overlays = [];
+        let kakaoLoaded = false;
+        let currentInfoOverlay = null; // 현재 열린 정보창
 
         function initMap(stores) {
             const mapContainer = document.getElementById('map');
             
-            // 기존 마커, 오버레이 제거
-            markers.forEach(m => m.setMap(null));
-            overlays.forEach(o => o.setMap(null));
-            markers = [];
-            overlays = [];
+            // 카카오맵 로드 확인
+            if (typeof kakao === 'undefined' || typeof kakao.maps === 'undefined') {
+                mapContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">지도를 불러올 수 없습니다. (API 키 또는 도메인 설정을 확인하세요)</div>';
+                return;
+            }
             
-            // 지도 생성
-            const mapOption = {
-                center: new kakao.maps.LatLng(37.5665, 126.9780),
-                level: 7
-            };
-            
-            map = new kakao.maps.Map(mapContainer, mapOption);
-            
-            // 주소-좌표 변환 객체
-            const geocoder = new kakao.maps.services.Geocoder();
-            const bounds = new kakao.maps.LatLngBounds();
-            let validCount = 0;
-            
-            stores.forEach((store, idx) => {
-                if (!store.address) return;
+            const loadMap = () => {
+                // 기존 마커, 오버레이 제거
+                markers.forEach(m => m.setMap(null));
+                overlays.forEach(o => o.setMap(null));
+                markers = [];
+                overlays = [];
+                if (currentInfoOverlay) {
+                    currentInfoOverlay.setMap(null);
+                    currentInfoOverlay = null;
+                }
                 
-                geocoder.addressSearch(store.address, function(result, status) {
-                    if (status === kakao.maps.services.Status.OK) {
-                        const coords = new kakao.maps.LatLng(result[0].y, result[0].x);
-                        
-                        // 상태에 따른 마커 색상
-                        const markerColor = getMarkerColor(store.status);
-                        
-                        // 커스텀 마커 생성
-                        const markerContent = `
-                            <div style="
-                                width: 24px;
-                                height: 24px;
-                                background: ${markerColor};
-                                border: 2px solid white;
-                                border-radius: 50%;
-                                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                            "></div>
-                        `;
-                        
-                        const customOverlay = new kakao.maps.CustomOverlay({
-                            position: coords,
-                            content: markerContent,
-                            yAnchor: 0.5,
-                            xAnchor: 0.5
-                        });
-                        customOverlay.setMap(map);
-                        overlays.push(customOverlay);
-                        
-                        // 매장명 라벨
-                        const labelContent = `
-                            <div style="
-                                background: white;
-                                padding: 4px 8px;
-                                border-radius: 4px;
-                                font-size: 11px;
-                                font-weight: 500;
-                                box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-                                white-space: nowrap;
-                                transform: translateY(-20px);
-                            ">${store.store}</div>
-                        `;
-                        
-                        const labelOverlay = new kakao.maps.CustomOverlay({
-                            position: coords,
-                            content: labelContent,
-                            yAnchor: 1.8,
-                            xAnchor: 0.5
-                        });
-                        labelOverlay.setMap(map);
-                        overlays.push(labelOverlay);
-                        
-                        bounds.extend(coords);
-                        validCount++;
-                        
-                        // 모든 마커가 표시되면 bounds 맞춤
-                        if (validCount > 0) {
-                            map.setBounds(bounds);
+                // 지도 생성 (심플한 스카이뷰 없는 기본 지도)
+                const mapOption = {
+                    center: new kakao.maps.LatLng(37.5665, 126.9780),
+                    level: 5,
+                    disableDoubleClickZoom: false
+                };
+                
+                map = new kakao.maps.Map(mapContainer, mapOption);
+                
+                // 지도 타입 컨트롤 제거하고 심플하게
+                // 줌 컨트롤만 추가
+                const zoomControl = new kakao.maps.ZoomControl();
+                map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+                
+                // 주소-좌표 변환 객체
+                const geocoder = new kakao.maps.services.Geocoder();
+                const bounds = new kakao.maps.LatLngBounds();
+                let validCount = 0;
+                
+                stores.forEach((store, idx) => {
+                    if (!store.address) return;
+                    
+                    geocoder.addressSearch(store.address, function(result, status) {
+                        if (status === kakao.maps.services.Status.OK) {
+                            const coords = new kakao.maps.LatLng(result[0].y, result[0].x);
+                            
+                            // 상태에 따른 마커 색상
+                            const markerColor = getMarkerColor(store.status);
+                            
+                            // 커스텀 마커 생성
+                            const markerContent = document.createElement('div');
+                            markerContent.innerHTML = `
+                                <div style="
+                                    width: 18px;
+                                    height: 18px;
+                                    background: ${markerColor};
+                                    border: 2px solid white;
+                                    border-radius: 50%;
+                                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                                    cursor: pointer;
+                                    transition: transform 0.15s;
+                                " onmouseover="this.style.transform='scale(1.3)'" onmouseout="this.style.transform='scale(1)'"></div>
+                            `;
+                            
+                            const customOverlay = new kakao.maps.CustomOverlay({
+                                position: coords,
+                                content: markerContent,
+                                yAnchor: 0.5,
+                                xAnchor: 0.5
+                            });
+                            customOverlay.setMap(map);
+                            overlays.push(customOverlay);
+                            
+                            // 정보창 (클릭 시 표시)
+                            const infoContent = `
+                                <div style="
+                                    background: white;
+                                    padding: 10px 14px;
+                                    border-radius: 8px;
+                                    font-size: 13px;
+                                    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                                    white-space: nowrap;
+                                    border-left: 4px solid ${markerColor};
+                                ">
+                                    <div style="font-weight: 600; margin-bottom: 4px;">${store.store}</div>
+                                    <div style="font-size: 11px; color: #666;">${store.status || '미정'}</div>
+                                </div>
+                            `;
+                            
+                            const infoOverlay = new kakao.maps.CustomOverlay({
+                                position: coords,
+                                content: infoContent,
+                                yAnchor: 1.5,
+                                xAnchor: 0.5
+                            });
+                            
+                            // 마커 클릭 이벤트
+                            markerContent.onclick = function() {
+                                // 기존 정보창 닫기
+                                if (currentInfoOverlay) {
+                                    currentInfoOverlay.setMap(null);
+                                }
+                                // 새 정보창 열기
+                                if (currentInfoOverlay === infoOverlay) {
+                                    currentInfoOverlay = null;
+                                } else {
+                                    infoOverlay.setMap(map);
+                                    currentInfoOverlay = infoOverlay;
+                                }
+                            };
+                            
+                            bounds.extend(coords);
+                            validCount++;
+                            
+                            // 모든 마커가 표시되면 bounds 맞춤
+                            if (validCount > 0) {
+                                map.setBounds(bounds, 100, 50, 100, 50); // 상하좌우 패딩
+                            }
                         }
+                    });
+                });
+                
+                // 지도 클릭 시 정보창 닫기
+                kakao.maps.event.addListener(map, 'click', function() {
+                    if (currentInfoOverlay) {
+                        currentInfoOverlay.setMap(null);
+                        currentInfoOverlay = null;
                     }
                 });
-            });
+            };
+
+            // kakao.maps.load로 SDK 초기화
+            if (!kakaoLoaded) {
+                kakao.maps.load(function() {
+                    kakaoLoaded = true;
+                    loadMap();
+                });
+            } else {
+                loadMap();
+            }
         }
 
         function getMarkerColor(status) {
