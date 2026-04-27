@@ -219,7 +219,8 @@
             if(cur.trim())lines.push(cur);
             for(let i=1;i<lines.length;i++){
                 const v=parseCSVLine(lines[i]);
-                const site=clean(v[1]),store=clean(v[7]),category=clean(v[2]),address=clean(v[10]),statusSymbol=clean(v[12]),statusText=clean(v[11]);
+                // 시트에 "영업요청 작성일자"(v[11]) 컬럼이 추가되면서 뒤 컬럼이 한 칸 밀림 → 인덱스 보정
+                const site=clean(v[1]),store=clean(v[7]),category=clean(v[2]),address=clean(v[10]),statusSymbol=clean(v[13]),statusText=clean(v[12]);
                 if(!site||!store)continue;
                 let status;
                 if(statusSymbol==='O')status='계약 완료';
